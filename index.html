@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>環教旅遊 1 號：減碳裝備賽 - 首頁引導版</title>
+    <style>
+        :root { --primary-green: #2d5a27; }
+        
+        body { 
+            font-family: "Microsoft JhengHei", sans-serif; 
+            margin: 0; padding: 0;
+            background: #f0f9ff; 
+            overflow: hidden; 
+            touch-action: none; 
+            width: 100vw; height: 100vh;
+        }
+        
+        #game-stage { 
+            position: relative; 
+            width: 100%; height: 100%; 
+            background: url('island.png') no-repeat center bottom/cover; 
+        }
+
+        .header { 
+            position: absolute; top: 20px; width: 100%; text-align: center; 
+            pointer-events: none; z-index: 10; 
+        }
+        .info-bar {
+            display: flex; justify-content: space-around; align-items: center;
+            width: 85%; margin: 0 auto;
+        }
+        #score-board, #timer { 
+            font-size: 36px; font-weight: bold; color: var(--primary-green); 
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.9); 
+        }
+        #timer.warning { color: #d32f2f; animation: pulse 1s infinite; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        #item-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+        }
+
+        .item { 
+            position: absolute;
+            width: 150px; height: 150px; 
+            cursor: grab; z-index: 5; 
+            touch-action: none; pointer-events: auto; 
+            user-select: none; -webkit-user-drag: none;
+            visibility: hidden;
+        }
+        .item img { width: 100%; height: 100%; pointer-events: none; object-fit: contain; }
+
+        #luggage-target { 
+            position: absolute; bottom: 80px; left: 50%; 
+            transform: translateX(-50%); 
+            width: 420px; height: 520px; 
+            background: url('luggage.png') no-repeat center/contain;
+            transition: filter 0.3s, transform 0.3s;
+            z-index: 1;
+        }
+
+        .luggage-glow { filter: drop-shadow(0 0 40px #4caf50) brightness(1.1); }
+        .luggage-shake { animation: shake 0.5s; }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(-50%); }
+            20%, 60% { transform: translateX(-54%); }
+            40%, 80% { transform: translateX(-46%); }
+        }
+
+        /* 首頁引導視窗 */
+        #intro-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 3000; backdrop-filter: blur(5px);
+        }
+        .intro-box {
+            background: rgba(255,255,255,0.98); padding: 40px 50px; border-radius: 30px;
+            border: 6px solid var(--primary-green); text-align: center;
+            max-width: 650px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+        .intro-box h2 { color: var(--primary-green); font-size: 38px; margin-top: 0; margin-bottom: 20px; }
+        .intro-box p { font-size: 26px; line-height: 1.6; color: #333; text-align: justify; margin-bottom: 35px; }
+        
+        /* 共用按鈕樣式 */
+        .action-btn {
+            padding: 15px 45px; font-size: 26px; font-weight: bold;
+            background-color: var(--primary-green); color: white;
+            border: none; border-radius: 50px; cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3); transition: transform 0.1s;
+        }
+        .action-btn:active { transform: scale(0.95); }
+
+        /* 遊戲結束結算視窗 */
+        #message {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(255,255,255,0.98); padding: 50px; border-radius: 30px;
+            border: 6px solid var(--primary-green); text-align: center; 
+            display: none; z-index: 2000; box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            font-size: 36px; font-weight: bold; color: #222; min-width: 400px;
+        }
+        .final-score { font-size: 55px; color: var(--primary-green); margin: 25px 0; }
+        .back-btn { margin-top: 30px; }
+    </style>
+</head>
+<body>
+
+    <div id="game-stage">
+        <div class="header">
+            <h1>環教旅遊 1 號：減碳裝備賽</h1>
+            <div class="info-bar">
+                <div id="score-board">積分：0 / 100</div>
+                <div id="timer">剩餘時間：30s</div>
+            </div>
+        </div>
+
+        <div id="item-container"></div>
+        <div id="luggage-target"></div>
+    </div>
+
+    <div id="intro-screen">
+        <div class="intro-box">
+            <h2>環教旅遊 1 號：減碳裝備賽</h2>
+            <p>歡迎參加減碳挑戰！請在 <strong>30 秒</strong>內，將畫面上的<strong>環保裝備</strong>拖移至行李箱中。收集正確裝備可獲積分，率先達到 <strong>100 分</strong>即可過關！<br><br>標章旅館不提供一次性備品，快來比看看誰才是綠色旅遊達人！</p>
+            <button id="start-btn" class="action-btn">遊戲開始 / 重新挑戰</button>
+        </div>
+    </div>
+
+    <div id="message"></div>
+
+    <audio id="sound-success" src="success.mp3" preload="auto"></audio>
+    <audio id="sound-error" src="error.mp3" preload="auto"></audio>
+
+    <script>
+        const itemData = [
+            { id: 1, img: '1.png', point: 15, isGreen: true },
+            { id: 2, img: '2.png', point: 15, isGreen: true },
+            { id: 3, img: '3.png', point: 15, isGreen: true },
+            { id: 7, img: '7.png', point: 15, isGreen: true },
+            { id: 8, img: '8.png', point: 15, isGreen: true },
+            { id: 9, img: '9.png', point: 15, isGreen: true },
+            { id: 10, img: '10.png', point: 15, isGreen: true },
+            { id: 11, img: '11.png', point: 15, isGreen: true },
+            { id: 12, img: '12.png', point: 15, isGreen: true },
+            { id: 4, img: '4.png', point: -15, isGreen: false },
+            { id: 5, img: '5.png', point: -15, isGreen: false },
+            { id: 6, img: '6.png', point: -15, isGreen: false }
+        ];
+
+        const GAME_DURATION = 30;
+        const TARGET_SCORE = 100;
+        const ITEM_SIZE = 150; 
+
+        let score = 0;
+        let timeLeft = GAME_DURATION;
+        let timerInterval;
+        let gameActive = false;
+        let placedRects = []; 
+
+        const container = document.getElementById('item-container');
+        const scoreBoard = document.getElementById('score-board');
+        const timerDisplay = document.getElementById('timer');
+        const luggage = document.getElementById('luggage-target');
+        const introScreen = document.getElementById('intro-screen');
+        const startBtn = document.getElementById('start-btn');
+        const msgBox = document.getElementById('message');
+
+        // 智慧型動態退讓排版演算法
+        function shufflePositions() {
+            container.innerHTML = '';
+            placedRects = [];
+            
+            const lugRect = luggage.getBoundingClientRect();
+
+            itemData.forEach((data) => {
+                let x, y, finalRect;
+                let placed = false;
+                
+                let currentSafeGap = 80; 
+                let maxAttemptsPerGap = 300; 
+
+                while (currentSafeGap >= 0 && !placed) {
+                    for (let attempts = 0; attempts < maxAttemptsPerGap; attempts++) {
+                        
+                        x = 10 + Math.random() * (window.innerWidth - ITEM_SIZE - 20);
+                        y = 120 + Math.random() * (window.innerHeight - ITEM_SIZE - 150);
+
+                        const safeRect = {
+                            left: x - currentSafeGap,
+                            right: x + ITEM_SIZE + currentSafeGap,
+                            top: y - currentSafeGap,
+                            bottom: y + ITEM_SIZE + currentSafeGap
+                        };
+
+                        const overlapLuggage = !(
+                            safeRect.right < lugRect.left ||
+                            safeRect.left > lugRect.right ||
+                            safeRect.bottom < lugRect.top ||
+                            safeRect.top > lugRect.bottom
+                        );
+
+                        if (overlapLuggage) continue;
+
+                        const overlapOthers = placedRects.some(r => {
+                            return !(
+                                safeRect.right < r.left ||
+                                safeRect.left > r.right ||
+                                safeRect.bottom < r.top ||
+                                safeRect.top > r.bottom
+                            );
+                        });
+
+                        if (!overlapOthers) {
+                            finalRect = { left: x, right: x + ITEM_SIZE, top: y, bottom: y + ITEM_SIZE };
+                            placed = true;
+                            break; 
+                        }
+                    }
+                    if (!placed) currentSafeGap -= 20; 
+                }
+
+                if (placed) {
+                    placedRects.push(finalRect);
+                    const el = document.createElement('div');
+                    el.className = 'item';
+                    el.style.left = `${x}px`;
+                    el.style.top = `${y}px`;
+                    el.style.visibility = 'visible';
+                    el.innerHTML = `<img src="${data.img}">`;
+                    container.appendChild(el);
+                    bindDragEvents(el, data);
+                }
+            });
+        }
+
+        function startCountdown() {
+            timeLeft = GAME_DURATION;
+            timerDisplay.innerText = `剩餘時間：${timeLeft}s`;
+            timerDisplay.classList.remove('warning');
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.innerText = `剩餘時間：${timeLeft}s`;
+                if(timeLeft <= 5) timerDisplay.classList.add('warning');
+                if(timeLeft <= 0) endGame(false);
+            }, 1000);
+        }
+
+        startBtn.addEventListener('click', () => {
+            introScreen.style.display = 'none'; // 隱藏首頁
+            gameActive = true;
+            score = 0;
+            updateScoreDisplay();
+            startCountdown();
+            shufflePositions(); 
+        });
+
+        // 供結算畫面呼叫的回首頁函數
+        window.showHome = function() {
+            msgBox.style.display = 'none';
+            introScreen.style.display = 'flex';
+        };
+
+        function bindDragEvents(el, data) {
+            let active = false;
+            let currentX = 0, currentY = 0, initialX, initialY, xOffset = 0, yOffset = 0;
+
+            el.addEventListener("mousedown", dragStart);
+            el.addEventListener("touchstart", dragStart, {passive: false});
+
+            function dragStart(e) {
+                if(!gameActive) return;
+                const cx = (e.type === "touchstart") ? e.touches[0].clientX : e.clientX;
+                const cy = (e.type === "touchstart") ? e.touches[0].clientY : e.clientY;
+                initialX = cx - xOffset;
+                initialY = cy - yOffset;
+                active = true;
+                el.style.zIndex = "1000";
+                window.addEventListener("mousemove", drag);
+                window.addEventListener("touchmove", drag, {passive: false});
+                window.addEventListener("mouseup", dragEnd);
+                window.addEventListener("touchend", dragEnd);
+            }
+
+            function drag(e) {
+                if (!active) return;
+                e.preventDefault();
+                const cx = (e.type === "touchmove") ? e.touches[0].clientX : e.clientX;
+                const cy = (e.type === "touchmove") ? e.touches[0].clientY : e.clientY;
+                currentX = cx - initialX;
+                currentY = cy - initialY;
+                xOffset = currentX;
+                yOffset = currentY;
+                el.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+            }
+
+            function dragEnd() {
+                if(!active) return;
+                active = false;
+                window.removeEventListener("mousemove", drag);
+                window.removeEventListener("touchmove", drag);
+                
+                const rect = luggage.getBoundingClientRect();
+                const itemRect = el.getBoundingClientRect();
+                const centerX = itemRect.left + ITEM_SIZE / 2;
+                const centerY = itemRect.top + ITEM_SIZE / 2;
+
+                if (centerX > rect.left && centerX < rect.right && centerY > rect.top && centerY < rect.bottom) {
+                    processHit(data, el);
+                } else {
+                    el.style.transition = "transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)";
+                    el.style.transform = "translate3d(0px, 0px, 0)";
+                    setTimeout(() => { el.style.transition = "none"; xOffset = 0; yOffset = 0; }, 400);
+                }
+            }
+        }
+
+        function updateScoreDisplay() {
+            scoreBoard.innerText = `積分：${score} / ${TARGET_SCORE}`;
+        }
+
+        function processHit(data, element) {
+            if(!gameActive) return;
+            element.style.visibility = 'hidden';
+            score += data.point;
+            if(score < 0) score = 0;
+            updateScoreDisplay();
+            
+            const snd = document.getElementById(data.isGreen ? 'sound-success' : 'sound-error');
+            snd.currentTime = 0;
+            snd.play().catch(() => {});
+            
+            if (data.isGreen) {
+                luggage.classList.add('luggage-glow');
+                setTimeout(() => luggage.classList.remove('luggage-glow'), 500);
+            } else {
+                luggage.classList.add('luggage-shake');
+                setTimeout(() => luggage.classList.remove('luggage-shake'), 500);
+            }
+            if(score >= TARGET_SCORE) endGame(true);
+        }
+
+        function endGame(isWin) {
+            if(!gameActive) return;
+            gameActive = false;
+            clearInterval(timerInterval);
+            
+            // 延遲一點點再顯示結算，讓玩家看到最後一個物品入箱
+            setTimeout(() => {
+                msgBox.innerHTML = isWin 
+                    ? `恭喜過關！<br><div class="final-score">最終積分：${score}</div>綠色旅遊，從你我做起！<br><button class="action-btn back-btn" onclick="showHome()">回首頁</button>` 
+                    : `再接再厲！<br><div class="final-score">積分：${score} / ${TARGET_SCORE}</div>愛護地球，下次一定行！<br><button class="action-btn back-btn" onclick="showHome()">回首頁</button>`;
+                msgBox.style.display = 'block';
+            }, 400);
+        }
+    </script>
+</body>
+</html>
