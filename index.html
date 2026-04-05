@@ -3,7 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>環教旅遊 1 號：減碳裝備賽 - 首頁引導版</title>
+    <title>環教旅遊 1 號：減碳裝備賽 (PWA版)</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2d5a27">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-512.png">
+
     <style>
         :root { --primary-green: #2d5a27; }
         
@@ -54,6 +61,7 @@
             touch-action: none; pointer-events: auto; 
             user-select: none; -webkit-user-drag: none;
             visibility: hidden;
+            will-change: transform; /* 效能優化：啟用 GPU 加速 */
         }
         .item img { width: 100%; height: 100%; pointer-events: none; object-fit: contain; }
 
@@ -75,40 +83,28 @@
             40%, 80% { transform: translateX(-46%); }
         }
 
-        /* 首頁引導視窗 */
-        #intro-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        /* 介面視窗樣式 */
+        #intro-screen, #message {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             background: rgba(0, 0, 0, 0.6);
             display: flex; justify-content: center; align-items: center;
             z-index: 3000; backdrop-filter: blur(5px);
         }
-        .intro-box {
+        .modal-box {
             background: rgba(255,255,255,0.98); padding: 40px 50px; border-radius: 30px;
             border: 6px solid var(--primary-green); text-align: center;
             max-width: 650px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
         }
-        .intro-box h2 { color: var(--primary-green); font-size: 38px; margin-top: 0; margin-bottom: 20px; }
-        .intro-box p { font-size: 26px; line-height: 1.6; color: #333; text-align: justify; margin-bottom: 35px; }
-        
-        /* 共用按鈕樣式 */
+        .modal-box h2 { color: var(--primary-green); font-size: 38px; margin-top: 0; margin-bottom: 20px; }
+        .modal-box p { font-size: 26px; line-height: 1.6; color: #333; margin-bottom: 35px; }
+
         .action-btn {
             padding: 15px 45px; font-size: 26px; font-weight: bold;
             background-color: var(--primary-green); color: white;
             border: none; border-radius: 50px; cursor: pointer;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3); transition: transform 0.1s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
-        .action-btn:active { transform: scale(0.95); }
-
-        /* 遊戲結束結算視窗 */
-        #message {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(255,255,255,0.98); padding: 50px; border-radius: 30px;
-            border: 6px solid var(--primary-green); text-align: center; 
-            display: none; z-index: 2000; box-shadow: 0 20px 50px rgba(0,0,0,0.3);
-            font-size: 36px; font-weight: bold; color: #222; min-width: 400px;
-        }
-        .final-score { font-size: 55px; color: var(--primary-green); margin: 25px 0; }
-        .back-btn { margin-top: 30px; }
+        .final-score { font-size: 55px; color: var(--primary-green); margin: 25px 0; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -127,19 +123,28 @@
     </div>
 
     <div id="intro-screen">
-        <div class="intro-box">
-            <h2>環教旅遊 1 號：減碳裝備賽</h2>
-            <p>歡迎參加減碳挑戰！請在 <strong>30 秒</strong>內，將畫面上的<strong>環保裝備</strong>拖移至行李箱中。收集正確裝備可獲積分，率先達到 <strong>100 分</strong>即可過關！<br><br>標章旅館不提供一次性備品，快來比看看誰才是綠色旅遊達人！</p>
+        <div class="modal-box">
+            <h2>減碳裝備賽</h2>
+            <p>歡迎參加挑戰！請在 <strong>30 秒</strong>內，將畫面上散落的<strong>環保裝備</strong>拖移至行李箱。收集正確裝備可獲積分，達到 <strong>100 分</strong>即可過關！</p>
             <button id="start-btn" class="action-btn">遊戲開始 / 重新挑戰</button>
         </div>
     </div>
 
-    <div id="message"></div>
+    <div id="message" style="display:none;"></div>
 
     <audio id="sound-success" src="success.mp3" preload="auto"></audio>
     <audio id="sound-error" src="error.mp3" preload="auto"></audio>
 
     <script>
+        // PWA Service Worker 註冊
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker 註冊成功'))
+                    .catch(err => console.log('註冊失敗:', err));
+            });
+        }
+
         const itemData = [
             { id: 1, img: '1.png', point: 15, isGreen: true },
             { id: 2, img: '2.png', point: 15, isGreen: true },
@@ -159,11 +164,7 @@
         const TARGET_SCORE = 100;
         const ITEM_SIZE = 150; 
 
-        let score = 0;
-        let timeLeft = GAME_DURATION;
-        let timerInterval;
-        let gameActive = false;
-        let placedRects = []; 
+        let score = 0, timeLeft = GAME_DURATION, timerInterval, gameActive = false, placedRects = []; 
 
         const container = document.getElementById('item-container');
         const scoreBoard = document.getElementById('score-board');
@@ -173,55 +174,31 @@
         const startBtn = document.getElementById('start-btn');
         const msgBox = document.getElementById('message');
 
-        // 智慧型動態退讓排版演算法
+        // 智慧防重疊演算法
         function shufflePositions() {
             container.innerHTML = '';
             placedRects = [];
-            
             const lugRect = luggage.getBoundingClientRect();
 
             itemData.forEach((data) => {
-                let x, y, finalRect;
-                let placed = false;
-                
-                let currentSafeGap = 80; 
-                let maxAttemptsPerGap = 300; 
+                let x, y, finalRect, placed = false, currentSafeGap = 80; 
 
                 while (currentSafeGap >= 0 && !placed) {
-                    for (let attempts = 0; attempts < maxAttemptsPerGap; attempts++) {
-                        
+                    for (let attempts = 0; attempts < 300; attempts++) {
                         x = 10 + Math.random() * (window.innerWidth - ITEM_SIZE - 20);
                         y = 120 + Math.random() * (window.innerHeight - ITEM_SIZE - 150);
 
                         const safeRect = {
-                            left: x - currentSafeGap,
-                            right: x + ITEM_SIZE + currentSafeGap,
-                            top: y - currentSafeGap,
-                            bottom: y + ITEM_SIZE + currentSafeGap
+                            left: x - currentSafeGap, right: x + ITEM_SIZE + currentSafeGap,
+                            top: y - currentSafeGap, bottom: y + ITEM_SIZE + currentSafeGap
                         };
 
-                        const overlapLuggage = !(
-                            safeRect.right < lugRect.left ||
-                            safeRect.left > lugRect.right ||
-                            safeRect.bottom < lugRect.top ||
-                            safeRect.top > lugRect.bottom
-                        );
+                        const overlapLug = !(safeRect.right < lugRect.left || safeRect.left > lugRect.right || safeRect.bottom < lugRect.top || safeRect.top > lugRect.bottom);
+                        const overlapOthers = placedRects.some(r => !(safeRect.right < r.left || safeRect.left > r.right || safeRect.bottom < r.top || safeRect.top > r.bottom));
 
-                        if (overlapLuggage) continue;
-
-                        const overlapOthers = placedRects.some(r => {
-                            return !(
-                                safeRect.right < r.left ||
-                                safeRect.left > r.right ||
-                                safeRect.bottom < r.top ||
-                                safeRect.top > r.bottom
-                            );
-                        });
-
-                        if (!overlapOthers) {
+                        if (!overlapLug && !overlapOthers) {
                             finalRect = { left: x, right: x + ITEM_SIZE, top: y, bottom: y + ITEM_SIZE };
-                            placed = true;
-                            break; 
+                            placed = true; break; 
                         }
                     }
                     if (!placed) currentSafeGap -= 20; 
@@ -231,9 +208,7 @@
                     placedRects.push(finalRect);
                     const el = document.createElement('div');
                     el.className = 'item';
-                    el.style.left = `${x}px`;
-                    el.style.top = `${y}px`;
-                    el.style.visibility = 'visible';
+                    el.style.left = `${x}px`; el.style.top = `${y}px`; el.style.visibility = 'visible';
                     el.innerHTML = `<img src="${data.img}">`;
                     container.appendChild(el);
                     bindDragEvents(el, data);
@@ -241,77 +216,32 @@
             });
         }
 
-        function startCountdown() {
-            timeLeft = GAME_DURATION;
-            timerDisplay.innerText = `剩餘時間：${timeLeft}s`;
-            timerDisplay.classList.remove('warning');
-            clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
-                timeLeft--;
-                timerDisplay.innerText = `剩餘時間：${timeLeft}s`;
-                if(timeLeft <= 5) timerDisplay.classList.add('warning');
-                if(timeLeft <= 0) endGame(false);
-            }, 1000);
-        }
-
-        startBtn.addEventListener('click', () => {
-            introScreen.style.display = 'none'; // 隱藏首頁
-            gameActive = true;
-            score = 0;
-            updateScoreDisplay();
-            startCountdown();
-            shufflePositions(); 
-        });
-
-        // 供結算畫面呼叫的回首頁函數
-        window.showHome = function() {
-            msgBox.style.display = 'none';
-            introScreen.style.display = 'flex';
-        };
-
         function bindDragEvents(el, data) {
-            let active = false;
-            let currentX = 0, currentY = 0, initialX, initialY, xOffset = 0, yOffset = 0;
+            let active = false, currentX = 0, currentY = 0, initialX, initialY, xOffset = 0, yOffset = 0;
 
-            el.addEventListener("mousedown", dragStart);
-            el.addEventListener("touchstart", dragStart, {passive: false});
-
-            function dragStart(e) {
+            const dragStart = (e) => {
                 if(!gameActive) return;
                 const cx = (e.type === "touchstart") ? e.touches[0].clientX : e.clientX;
                 const cy = (e.type === "touchstart") ? e.touches[0].clientY : e.clientY;
-                initialX = cx - xOffset;
-                initialY = cy - yOffset;
-                active = true;
-                el.style.zIndex = "1000";
-                window.addEventListener("mousemove", drag);
-                window.addEventListener("touchmove", drag, {passive: false});
-                window.addEventListener("mouseup", dragEnd);
-                window.addEventListener("touchend", dragEnd);
-            }
+                initialX = cx - xOffset; initialY = cy - yOffset;
+                active = true; el.style.zIndex = "1000";
+            };
 
-            function drag(e) {
+            const drag = (e) => {
                 if (!active) return;
-                e.preventDefault();
                 const cx = (e.type === "touchmove") ? e.touches[0].clientX : e.clientX;
                 const cy = (e.type === "touchmove") ? e.touches[0].clientY : e.clientY;
-                currentX = cx - initialX;
-                currentY = cy - initialY;
-                xOffset = currentX;
-                yOffset = currentY;
+                currentX = cx - initialX; currentY = cy - initialY;
+                xOffset = currentX; yOffset = currentY;
                 el.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
-            }
+            };
 
-            function dragEnd() {
+            const dragEnd = () => {
                 if(!active) return;
                 active = false;
-                window.removeEventListener("mousemove", drag);
-                window.removeEventListener("touchmove", drag);
-                
                 const rect = luggage.getBoundingClientRect();
                 const itemRect = el.getBoundingClientRect();
-                const centerX = itemRect.left + ITEM_SIZE / 2;
-                const centerY = itemRect.top + ITEM_SIZE / 2;
+                const centerX = itemRect.left + ITEM_SIZE / 2, centerY = itemRect.top + ITEM_SIZE / 2;
 
                 if (centerX > rect.left && centerX < rect.right && centerY > rect.top && centerY < rect.bottom) {
                     processHit(data, el);
@@ -320,47 +250,49 @@
                     el.style.transform = "translate3d(0px, 0px, 0)";
                     setTimeout(() => { el.style.transition = "none"; xOffset = 0; yOffset = 0; }, 400);
                 }
-            }
-        }
+            };
 
-        function updateScoreDisplay() {
-            scoreBoard.innerText = `積分：${score} / ${TARGET_SCORE}`;
+            el.addEventListener("mousedown", dragStart);
+            el.addEventListener("touchstart", dragStart, {passive: false});
+            window.addEventListener("mousemove", drag);
+            window.addEventListener("touchmove", drag, {passive: false});
+            window.addEventListener("mouseup", dragEnd);
+            window.addEventListener("touchend", dragEnd);
         }
 
         function processHit(data, element) {
             if(!gameActive) return;
             element.style.visibility = 'hidden';
-            score += data.point;
-            if(score < 0) score = 0;
-            updateScoreDisplay();
+            score += data.point; if(score < 0) score = 0;
+            scoreBoard.innerText = `積分：${score} / ${TARGET_SCORE}`;
             
-            const snd = document.getElementById(data.isGreen ? 'sound-success' : 'sound-error');
-            snd.currentTime = 0;
-            snd.play().catch(() => {});
+            document.getElementById(data.isGreen ? 'sound-success' : 'sound-error').play();
             
-            if (data.isGreen) {
-                luggage.classList.add('luggage-glow');
-                setTimeout(() => luggage.classList.remove('luggage-glow'), 500);
-            } else {
-                luggage.classList.add('luggage-shake');
-                setTimeout(() => luggage.classList.remove('luggage-shake'), 500);
-            }
+            const effect = data.isGreen ? 'luggage-glow' : 'luggage-shake';
+            luggage.classList.add(effect);
+            setTimeout(() => luggage.classList.remove(effect), 500);
+
             if(score >= TARGET_SCORE) endGame(true);
         }
 
         function endGame(isWin) {
-            if(!gameActive) return;
-            gameActive = false;
-            clearInterval(timerInterval);
-            
-            // 延遲一點點再顯示結算，讓玩家看到最後一個物品入箱
+            gameActive = false; clearInterval(timerInterval);
             setTimeout(() => {
-                msgBox.innerHTML = isWin 
-                    ? `恭喜過關！<br><div class="final-score">最終積分：${score}</div>綠色旅遊，從你我做起！<br><button class="action-btn back-btn" onclick="showHome()">回首頁</button>` 
-                    : `再接再厲！<br><div class="final-score">積分：${score} / ${TARGET_SCORE}</div>愛護地球，下次一定行！<br><button class="action-btn back-btn" onclick="showHome()">回首頁</button>`;
-                msgBox.style.display = 'block';
-            }, 400);
+                msgBox.innerHTML = `<div class="modal-box"><h2>${isWin?'恭喜過關！':'再接再厲'}</h2><div class="final-score">積分：${score}</div><button onclick="location.reload()" class="action-btn">回首頁</button></div>`;
+                msgBox.style.display = 'flex';
+            }, 500);
         }
+
+        startBtn.onclick = () => {
+            introScreen.style.display = 'none'; gameActive = true; score = 0; timeLeft = GAME_DURATION;
+            scoreBoard.innerText = `積分：0 / ${TARGET_SCORE}`;
+            shufflePositions();
+            timerInterval = setInterval(() => {
+                timeLeft--; timerDisplay.innerText = `剩餘時間：${timeLeft}s`;
+                if(timeLeft <= 5) timerDisplay.classList.add('warning');
+                if(timeLeft <= 0) endGame(false);
+            }, 1000);
+        };
     </script>
 </body>
 </html>
