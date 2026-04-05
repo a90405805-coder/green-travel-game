@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>環教旅遊 1 號：減碳裝備賽 (PWA版)</title>
+    <title>環教旅遊 1 號：減碳裝備賽 (PWA 佈局優化版)</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2d5a27">
@@ -29,52 +29,57 @@
             background: url('island.png') no-repeat center bottom/cover; 
         }
 
+        /* 頂部資訊列：保持在最上層 */
         .header { 
-            position: absolute; top: 20px; width: 100%; text-align: center; 
-            pointer-events: none; z-index: 10; 
+            position: absolute; top: 0; width: 100%; height: 100px; /* 固定的高度 */
+            text-align: center; pointer-events: none; z-index: 10; 
+            display: flex; flex-direction: column; justify-content: center;
         }
         .info-bar {
             display: flex; justify-content: space-around; align-items: center;
             width: 85%; margin: 0 auto;
         }
         #score-board, #timer { 
-            font-size: 36px; font-weight: bold; color: var(--primary-green); 
+            font-size: 32px; font-weight: bold; color: var(--primary-green); 
             text-shadow: 2px 2px 4px rgba(255,255,255,0.9); 
         }
         #timer.warning { color: #d32f2f; animation: pulse 1s infinite; }
 
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
+        /* 裝備容器：全螢幕 */
         #item-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none;
+            pointer-events: none; z-index: 5;
         }
 
         .item { 
             position: absolute;
-            width: 150px; height: 150px; 
+            /* 智慧調整物品大小：最小70px，最大120px */
+            width: clamp(70px, 10vw, 120px); 
+            height: clamp(70px, 10vw, 120px); 
             cursor: grab; z-index: 5; 
             touch-action: none; pointer-events: auto; 
             user-select: none; -webkit-user-drag: none;
             visibility: hidden;
-            will-change: transform; /* 效能優化：啟用 GPU 加速 */
+            will-change: transform; /* GPU 加速 */
         }
         .item img { width: 100%; height: 100%; pointer-events: none; object-fit: contain; }
 
+        /* 行李箱：縮小尺寸並保持水平居中 */
         #luggage-target { 
-            position: absolute; bottom: 80px; left: 50%; 
-            transform: translateX(-50%); 
-            width: 420px; height: 520px; 
+            position: absolute; 
+            /* 使用 clamp 讓行李箱在平板上尺寸適中 */
+            width: clamp(200px, 30vw, 300px); 
+            aspect-ratio: 420/520; /* 保持原始長寬比 */
+            bottom: 60px; /* 距離底部適當距離 */
+            left: 50%; transform: translateX(-50%); 
             background: url('luggage.png') no-repeat center/contain;
             transition: filter 0.3s, transform 0.3s;
             z-index: 1;
         }
 
-        .luggage-glow { filter: drop-shadow(0 0 40px #4caf50) brightness(1.1); }
+        .luggage-glow { filter: drop-shadow(0 0 30px #4caf50) brightness(1.1); }
         .luggage-shake { animation: shake 0.5s; }
 
         @keyframes shake {
@@ -104,13 +109,14 @@
             border: none; border-radius: 50px; cursor: pointer;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         }
+        .action-btn:active { transform: scale(0.95); }
         .final-score { font-size: 55px; color: var(--primary-green); margin: 25px 0; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <div id="game-stage">
-        <div class="header">
+        <div class="header" id="game-header">
             <h1>環教旅遊 1 號：減碳裝備賽</h1>
             <div class="info-bar">
                 <div id="score-board">積分：0 / 100</div>
@@ -140,7 +146,7 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js')
-                    .then(reg => console.log('Service Worker 註冊成功'))
+                    .then(reg => console.log('PWA Service Worker 註冊成功'))
                     .catch(err => console.log('註冊失敗:', err));
             });
         }
@@ -162,7 +168,6 @@
 
         const GAME_DURATION = 30;
         const TARGET_SCORE = 100;
-        const ITEM_SIZE = 150; 
 
         let score = 0, timeLeft = GAME_DURATION, timerInterval, gameActive = false, placedRects = []; 
 
@@ -170,53 +175,78 @@
         const scoreBoard = document.getElementById('score-board');
         const timerDisplay = document.getElementById('timer');
         const luggage = document.getElementById('luggage-target');
+        const header = document.getElementById('game-header');
         const introScreen = document.getElementById('intro-screen');
         const startBtn = document.getElementById('start-btn');
         const msgBox = document.getElementById('message');
 
-        // 智慧防重疊演算法
+        // 智慧型平板防重疊演算法：確保裝備避開頂部文字列與行李箱
         function shufflePositions() {
             container.innerHTML = '';
             placedRects = [];
+            
+            // 效能優化：事先快取安全禁區位置
             const lugRect = luggage.getBoundingClientRect();
+            const headRect = header.getBoundingClientRect();
+            
+            // 決定物品生成的「安全寬度」與「安全高度」
+            // 由於使用動態尺寸，需要先取得一個樣本尺寸
+            const testEl = document.createElement('div');
+            testEl.className = 'item'; testEl.style.visibility = 'hidden';
+            container.appendChild(testEl);
+            const itemBaseSize = testEl.offsetWidth; // clamp 計算後的實際寬度
+            container.removeChild(testEl);
+
+            const screenW = window.innerWidth;
+            const screenH = window.innerHeight;
+            const borderGap = 15; // 距離螢幕邊緣安全距離
 
             itemData.forEach((data) => {
-                let x, y, finalRect, placed = false, currentSafeGap = 80; 
+                let x, y, placed = false, currentSafeGap = 60; // 初始安全間距
 
+                // 如果物品很多或螢幕太小，系統會智慧縮小間距重試，保證全部呈現
                 while (currentSafeGap >= 0 && !placed) {
                     for (let attempts = 0; attempts < 300; attempts++) {
-                        x = 10 + Math.random() * (window.innerWidth - ITEM_SIZE - 20);
-                        y = 120 + Math.random() * (window.innerHeight - ITEM_SIZE - 150);
+                        // 隨機在全螢幕範圍內生成中心點
+                        x = borderGap + Math.random() * (screenW - itemBaseSize - borderGap * 2);
+                        y = headRect.bottom + 20 + Math.random() * (screenH - itemBaseSize - headRect.bottom - 40);
 
+                        // 計算含安全間距的包圍盒
                         const safeRect = {
-                            left: x - currentSafeGap, right: x + ITEM_SIZE + currentSafeGap,
-                            top: y - currentSafeGap, bottom: y + ITEM_SIZE + currentSafeGap
+                            left: x - currentSafeGap, right: x + itemBaseSize + currentSafeGap,
+                            top: y - currentSafeGap, bottom: y + itemBaseSize + currentSafeGap
                         };
 
+                        // 1. 檢查是否與頂部資訊列重疊 (禁區1)
+                        const overlapHeader = !(safeRect.bottom < headRect.top || safeRect.top > headRect.bottom);
+
+                        // 2. 檢查是否與行李箱重疊 (禁區2)
                         const overlapLug = !(safeRect.right < lugRect.left || safeRect.left > lugRect.right || safeRect.bottom < lugRect.top || safeRect.top > lugRect.bottom);
+                        
+                        // 3. 檢查是否與已放置的其他裝備重疊 (禁區3)
                         const overlapOthers = placedRects.some(r => !(safeRect.right < r.left || safeRect.left > r.right || safeRect.bottom < r.top || safeRect.top > r.bottom));
 
-                        if (!overlapLug && !overlapOthers) {
-                            finalRect = { left: x, right: x + ITEM_SIZE, top: y, bottom: y + ITEM_SIZE };
+                        if (!overlapHeader && !overlapLug && !overlapOthers) {
+                            // 確定位置，記錄不含安全間距的真實邊框
+                            placedRects.push({ left: x, right: x + itemBaseSize, top: y, bottom: y + itemBaseSize });
                             placed = true; break; 
                         }
                     }
-                    if (!placed) currentSafeGap -= 20; 
+                    if (!placed) currentSafeGap -= 15; // 若找不到空位，縮小物品間距重試
                 }
 
                 if (placed) {
-                    placedRects.push(finalRect);
                     const el = document.createElement('div');
                     el.className = 'item';
                     el.style.left = `${x}px`; el.style.top = `${y}px`; el.style.visibility = 'visible';
                     el.innerHTML = `<img src="${data.img}">`;
                     container.appendChild(el);
-                    bindDragEvents(el, data);
+                    bindDragEvents(el, data, itemBaseSize);
                 }
             });
         }
 
-        function bindDragEvents(el, data) {
+        function bindDragEvents(el, data, itemSize) {
             let active = false, currentX = 0, currentY = 0, initialX, initialY, xOffset = 0, yOffset = 0;
 
             const dragStart = (e) => {
@@ -239,11 +269,12 @@
             const dragEnd = () => {
                 if(!active) return;
                 active = false;
-                const rect = luggage.getBoundingClientRect();
+                // 用中心點進行碰撞檢測
+                const lugRect = luggage.getBoundingClientRect();
                 const itemRect = el.getBoundingClientRect();
-                const centerX = itemRect.left + ITEM_SIZE / 2, centerY = itemRect.top + ITEM_SIZE / 2;
+                const centerX = itemRect.left + itemSize / 2, centerY = itemRect.top + itemSize / 2;
 
-                if (centerX > rect.left && centerX < rect.right && centerY > rect.top && centerY < rect.bottom) {
+                if (centerX > lugRect.left && centerX < lugRect.right && centerY > lugRect.top && centerY < lugRect.bottom) {
                     processHit(data, el);
                 } else {
                     el.style.transition = "transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)";
@@ -286,7 +317,11 @@
         startBtn.onclick = () => {
             introScreen.style.display = 'none'; gameActive = true; score = 0; timeLeft = GAME_DURATION;
             scoreBoard.innerText = `積分：0 / ${TARGET_SCORE}`;
-            shufflePositions();
+            timerDisplay.classList.remove('warning');
+            
+            // 延遲生成，確保 CSS 計算完整
+            setTimeout(shufflePositions, 100);
+
             timerInterval = setInterval(() => {
                 timeLeft--; timerDisplay.innerText = `剩餘時間：${timeLeft}s`;
                 if(timeLeft <= 5) timerDisplay.classList.add('warning');
